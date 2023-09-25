@@ -1,13 +1,10 @@
 use serenity::{
-    framework::standard::{
-        macros::{
-            command,
-            group
-        },
-        CommandResult
-    },
-    client::Context,
-    model::channel::Message
+  client::Context,
+  framework::standard::{
+    macros::{command, group},
+    CommandResult,
+  },
+  model::channel::Message,
 };
 
 #[group]
@@ -16,6 +13,6 @@ struct General;
 
 #[command]
 async fn info(ctx: &Context, msg: &Message) -> CommandResult {
-    msg.reply(ctx, "Bot is running!").await?;
-    Ok(())
+  msg.reply(ctx, "Bot is running!").await?;
+  Ok(())
 }

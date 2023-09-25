@@ -2,6 +2,7 @@
 
 mod client;
 mod commands;
+mod composer;
 mod handler;
 mod voice;
 
