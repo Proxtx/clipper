@@ -1,5 +1,5 @@
 # clipper
-clip-bot that allows you to clip the last 30 seconds of audio in a voicechat
+clip-bot that allows you to clip the last 30 seconds of audio in a voicechat. It automatically joins voicechats. Works on multiple servers.
 
 ## setup
 1. create .cargo folder
