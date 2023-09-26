@@ -1,17 +1,16 @@
 use {
   crate::{
-    composer::{Director, DirectorImplementation},
-    handler::HandlerManager,
-    voice::Handler as VoiceHandler,
+    composer::DirectorImplementation, handler::HandlerManager, voice::Handler as VoiceHandler,
   },
   serenity::{
     async_trait,
     framework::StandardFramework,
     model::prelude::Ready,
     prelude::{Client, Context, EventHandler, GatewayIntents},
+    CacheAndHttp,
   },
   songbird::{driver::DecodeMode, Config, SerenityInit},
-  std::sync::{Arc, Mutex},
+  std::sync::Arc,
 };
 
 #[derive(Debug)]
@@ -31,16 +30,18 @@ impl EventHandler for Handler {
 
 pub struct DiscordClient {
   pub director: DirectorImplementation,
+  pub client: Arc<CacheAndHttp>,
 }
 
 impl DiscordClient {
-  pub async fn new(token: &str) -> Result<DiscordClient, DiscordClientError> {
+  pub async fn new(
+    token: &str,
+    director: DirectorImplementation,
+  ) -> Result<DiscordClient, DiscordClientError> {
     // This is necessary to not run into a runtime error. Don't ask me why
     tracing_subscriber::fmt::init();
 
     let mut handler_manager = HandlerManager::new();
-
-    let director = Arc::new(Mutex::new(Director::new(48_000, None)));
 
     handler_manager.add_handler(Box::from(Handler));
     handler_manager.add_handler(Box::from(VoiceHandler::new(director.clone())));
@@ -63,11 +64,18 @@ impl DiscordClient {
       Err(_) => return Err(DiscordClientError::ClientCreation),
     };
 
-    match client.start().await {
-      Ok(_) => {}
-      Err(_) => return Err(DiscordClientError::ClientConnection),
-    }
+    let cache_and_http = client.cache_and_http.clone();
 
-    Ok(DiscordClient { director })
+    tokio::spawn(async move {
+      match client.start().await {
+        Ok(_) => Ok(()),
+        Err(_) => return Err(DiscordClientError::ClientConnection),
+      }
+    });
+
+    Ok(DiscordClient {
+      director,
+      client: cache_and_http,
+    })
   }
 }

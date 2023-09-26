@@ -96,7 +96,7 @@ impl VoiceEventHandler for Receiver {
 
 pub fn save_clip(guild_id: &GuildId, data: &Vec<i16>) -> String {
   let path = format!(
-    "output/{}/{}",
+    "output/{}/{}.wav",
     guild_id,
     SystemTime::now()
       .duration_since(UNIX_EPOCH)
@@ -104,7 +104,9 @@ pub fn save_clip(guild_id: &GuildId, data: &Vec<i16>) -> String {
       .as_millis()
   );
 
-  std::fs::create_dir_all(&path).unwrap();
+  let output_dir = format!("output/{}", guild_id);
+
+  std::fs::create_dir_all(&output_dir).unwrap();
 
   let _ = wav::write(
     wav::Header::new(wav::header::WAV_FORMAT_PCM, 2, 48_000, 16),

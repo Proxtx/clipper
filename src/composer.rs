@@ -60,11 +60,6 @@ impl Composer {
 
     let last_snippet = self.snippets.back().unwrap();
 
-    println!(
-      "Clip length: {}",
-      last_snippet.end as i64 - first_snippet.start as i64
-    );
-
     return Duration::from_millis(last_snippet.end - first_snippet.start);
   }
 
@@ -89,10 +84,14 @@ impl Composer {
         Some(v) => *v,
       };
 
-      println!("snippet start index {}", snippet_start_index);
-
       for (index, packet) in snippet.data.iter().enumerate() {
         let global_index = snippet_start_index + index;
+
+        // this catches to long audio clips. Too long audio clips can happen if the shifting moved some snippets around. We can ignore this.
+        if global_index >= audio.len() {
+          // println!("Clip is too long for predetermined clip length. Available indexes: {}, Audio index: {}", audio.len()-1, global_index);
+          continue;
+        }
 
         audio[global_index] = (audio[global_index] as i32 + *packet as i32)
           .clamp(i16::MIN as i32, i16::MAX as i32) as i16;
