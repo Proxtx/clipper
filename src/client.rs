@@ -38,9 +38,6 @@ impl DiscordClient {
     token: &str,
     director: DirectorImplementation,
   ) -> Result<DiscordClient, DiscordClientError> {
-    // This is necessary to not run into a runtime error. Don't ask me why
-    tracing_subscriber::fmt::init();
-
     let mut handler_manager = HandlerManager::new();
 
     handler_manager.add_handler(Box::from(Handler));

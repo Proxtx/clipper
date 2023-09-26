@@ -7,7 +7,9 @@ use {
     model::prelude::{ChannelId, ChannelType, GuildId, VoiceState},
     prelude::EventHandler,
   },
-  songbird::{CoreEvent, Event, EventContext, EventHandler as VoiceEventHandler, Songbird},
+  songbird::{
+    error::JoinResult, CoreEvent, Event, EventContext, EventHandler as VoiceEventHandler, Songbird,
+  },
   std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -244,7 +246,6 @@ async fn handle_guild_voice_state(
     }
 
     GuildVoiceState::Move(guild_id, channel_id) => {
-      leave_voice_channel(ctx, guild_id).await?;
       join_voice_channel(ctx, guild_id, channel_id, director.clone()).await?;
     }
   }
@@ -262,7 +263,19 @@ async fn join_voice_channel(
 ) -> Result<(), VoiceError> {
   let manager = create_songbird_manager(ctx).await?;
 
-  let (handler_lock, conn_result) = manager.join(*guild_id, *channel_id).await;
+  let (handler_lock, conn_result) = match manager.get(guild_id.0) {
+    Some(call_arc) => {
+      let mut call = call_arc.lock().await;
+      call.remove_all_global_events();
+      let result = call.join(*channel_id).await;
+      let parsed_result: JoinResult<()> = match result {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+      };
+      (call_arc.clone(), parsed_result)
+    }
+    None => manager.join(*guild_id, *channel_id).await,
+  };
 
   match conn_result {
     Ok(_) => {
@@ -276,13 +289,25 @@ async fn join_voice_channel(
       Ok(())
     }
 
-    Err(_) => Err(VoiceError::SongbirdConnectError),
+    Err(e) => {
+      println!("Error: {}", e);
+      Err(VoiceError::SongbirdConnectError)
+    }
   }
 }
 
 async fn leave_voice_channel(ctx: &Context, guild_id: &GuildId) -> Result<(), VoiceError> {
   let manager = create_songbird_manager(ctx).await?;
-  let _ = manager.leave(*guild_id).await;
+
+  match manager.get(guild_id.0) {
+    Some(call) => match call.lock().await.leave().await {
+      Ok(_) => {}
+      Err(_) => {
+        return Err(VoiceError::SongbirdConnectError);
+      }
+    },
+    None => {}
+  };
   Ok(())
 }
 
@@ -291,40 +316,4 @@ async fn create_songbird_manager(ctx: &Context) -> Result<Arc<Songbird>, VoiceEr
     Some(v) => Ok(v.clone()),
     None => Err(VoiceError::SongbirdInitError),
   }
-}
-
-async fn bot_connected(ctx: &Context, guild_id: GuildId) -> Result<bool, VoiceError> {
-  let guild = match ctx.http.get_guild(guild_id.0).await {
-    Ok(v) => v,
-    Err(_) => {
-      return Err(VoiceError::GuildNotFound);
-    }
-  };
-
-  let channels = match guild.channels(&ctx.http).await {
-    Ok(v) => v,
-    Err(_) => return Err(VoiceError::ChannelFetchError),
-  };
-
-  let mut connected = false;
-
-  for channel in channels.values() {
-    let kind = channel.clone().kind;
-    if kind != ChannelType::Voice {
-      continue;
-    }
-
-    let members = match channel.members(ctx.cache.clone()).await {
-      Ok(v) => v,
-      Err(_) => return Err(VoiceError::ChannelFetchError),
-    };
-
-    for member in members {
-      if member.user.id == ctx.cache.current_user().id {
-        connected = true;
-      }
-    }
-  }
-
-  Ok(connected)
 }
