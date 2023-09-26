@@ -1,15 +1,19 @@
-use crate::composer::{Director, DirectorImplementation};
-
-use serenity::{
-  async_trait,
-  client::Context,
-  model::prelude::{ChannelId, ChannelType, GuildId, VoiceState},
-  prelude::EventHandler,
+use {
+  crate::composer::{Director, DirectorImplementation},
+  rand::Rng,
+  serenity::{
+    async_trait,
+    client::Context,
+    model::prelude::{ChannelId, ChannelType, GuildId, VoiceState},
+    prelude::EventHandler,
+  },
+  songbird::{CoreEvent, Event, EventContext, EventHandler as VoiceEventHandler, Songbird},
+  std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::{Instant, SystemTime, UNIX_EPOCH},
+  },
 };
-
-use songbird::{CoreEvent, Event, EventContext, EventHandler as VoiceEventHandler, Songbird};
-
-use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub enum VoiceError {
@@ -20,14 +24,22 @@ pub enum VoiceError {
   SongbirdConnectError,
 }
 
+#[derive(Clone)]
 struct Receiver {
   director: DirectorImplementation,
   guild_id: GuildId,
+  track_manager: Arc<Mutex<HashMap<u32, u32>>>,
+  instant: Instant,
 }
 
 impl Receiver {
   pub fn new(guild_id: GuildId, director: DirectorImplementation) -> Self {
-    Self { director, guild_id }
+    Self {
+      director,
+      guild_id,
+      track_manager: Arc::new(Mutex::new(HashMap::new())),
+      instant: Instant::now(),
+    }
   }
 }
 
@@ -37,52 +49,70 @@ impl VoiceEventHandler for Receiver {
     use EventContext as Ctx;
 
     match ctx {
+      Ctx::SpeakingUpdate(data) => {
+        let mut manager = self.track_manager.lock().unwrap();
+        let track_id: u32 = match data.speaking {
+          true => {
+            let mut rng = rand::thread_rng();
+            rng.gen()
+          }
+          false => 0,
+        };
+        manager.insert(data.ssrc, track_id);
+      }
+
       Ctx::VoicePacket(data) => {
         if let Some(audio) = data.audio {
-          /*let mut vec_1 = self.current_audio.lock().unwrap();
-          let vec = vec_1.get_mut();
-          vec.extend(audio.into_iter());
-
-          println!("{}", vec.len());
-
-          if vec.len() > 2000000 {
-            let _ = wav::write(
-              wav::Header::new(wav::header::WAV_FORMAT_PCM, 1, 96_000, 16),
-              &wav::BitDepth::Sixteen(vec.to_vec()),
-              &mut File::create(Path::new("output/audio.wav")).unwrap(),
-            );
-
-            panic!("Exceeded length")
-          }*/
-
           let mut director = self.director.lock().unwrap();
 
-          director.incoming_audio(&self.guild_id, audio.clone());
+          let track = self
+            .track_manager
+            .lock()
+            .unwrap()
+            .get(&data.packet.ssrc)
+            .unwrap_or(&0)
+            .clone();
 
-          println!("{}", data.packet.timestamp.0);
-
-          if director.guild_clip_length(&self.guild_id) > std::time::Duration::from_secs(5) {
-            let compose = director.clip(&self.guild_id);
-            save_wav("output/clip.wav", compose);
-            director.leave(&self.guild_id);
+          if track == 0 {
+            return None;
           }
+
+          director.incoming_audio(
+            &self.guild_id,
+            audio.clone(),
+            self.instant.elapsed().as_millis() as u32,
+            track,
+          );
         } else {
           println!("Received an audio packet without audio. Is the driver working?");
         }
       }
       _ => {}
-    }
+    };
 
     None
   }
 }
 
-fn save_wav(path: &str, data: Vec<i16>) {
+pub fn save_clip(guild_id: &GuildId, data: &Vec<i16>) -> String {
+  let path = format!(
+    "output/{}/{}",
+    guild_id,
+    SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .unwrap()
+      .as_millis()
+  );
+
+  std::fs::create_dir_all(&path).unwrap();
+
   let _ = wav::write(
     wav::Header::new(wav::header::WAV_FORMAT_PCM, 2, 48_000, 16),
     &wav::BitDepth::Sixteen(data.to_vec()),
-    &mut std::fs::File::create(std::path::Path::new(path)).unwrap(),
+    &mut std::fs::File::create(std::path::Path::new(&path)).unwrap(),
   );
+
+  path
 }
 
 pub struct Handler {
@@ -236,10 +266,10 @@ async fn join_voice_channel(
     Ok(_) => {
       let mut handler = handler_lock.lock().await;
 
-      handler.add_global_event(
-        CoreEvent::VoicePacket.into(),
-        Receiver::new(guild_id.clone(), director),
-      );
+      let receiver = Receiver::new(guild_id.clone(), director);
+
+      handler.add_global_event(CoreEvent::VoicePacket.into(), receiver.clone());
+      handler.add_global_event(CoreEvent::SpeakingUpdate.into(), receiver.clone());
 
       Ok(())
     }

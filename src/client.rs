@@ -1,20 +1,20 @@
-use songbird::{driver::DecodeMode, Config, SerenityInit};
-
-use std::sync::{Arc, Mutex};
-
-use serenity::{
-  async_trait,
-  framework::StandardFramework,
-  model::prelude::Ready,
-  prelude::{Client, Context, EventHandler, GatewayIntents},
+use {
+  crate::{
+    composer::{Director, DirectorImplementation},
+    handler::HandlerManager,
+    voice::Handler as VoiceHandler,
+  },
+  serenity::{
+    async_trait,
+    framework::StandardFramework,
+    model::prelude::Ready,
+    prelude::{Client, Context, EventHandler, GatewayIntents},
+  },
+  songbird::{driver::DecodeMode, Config, SerenityInit},
+  std::sync::{Arc, Mutex},
 };
 
-use crate::{
-  composer::{Director, DirectorImplementation},
-  handler::HandlerManager,
-  voice::Handler as VoiceHandler,
-};
-
+#[derive(Debug)]
 pub enum DiscordClientError {
   ClientCreation,
   ClientConnection,
@@ -30,7 +30,7 @@ impl EventHandler for Handler {
 }
 
 pub struct DiscordClient {
-  director: DirectorImplementation,
+  pub director: DirectorImplementation,
 }
 
 impl DiscordClient {

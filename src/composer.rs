@@ -1,34 +1,35 @@
-use crate::voice::GuildVoiceState;
-use serenity::model::prelude::GuildId;
-use std::collections::{HashMap, LinkedList};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use {
+  crate::voice::GuildVoiceState,
+  serenity::model::prelude::GuildId,
+  std::{
+    collections::{HashMap, LinkedList},
+    sync::{Arc, Mutex},
+    time::Duration,
+  },
+};
 
 pub type DirectorImplementation = Arc<Mutex<Director>>;
 
 pub struct Snippet {
-  start: SystemTime,
-  end: SystemTime,
+  start: u64,
+  end: u64,
   data: Vec<i16>,
   sampling_rate: u32,
+  track: u32,
 }
 
 impl Snippet {
-  pub fn new(data: Vec<i16>, sampling_rate: u32) -> Self {
-    let sampling_rate_ms = sampling_rate as u128 / 1000;
+  pub fn new(data: Vec<i16>, sampling_rate: u32, timestamp: u32, track: u32) -> Self {
+    let sampling_rate_ms = sampling_rate as u64 / 1000;
 
-    let start = SystemTime::now();
-    let end = start
-      + Duration::from_millis(
-        u64::try_from(data.len() as u128 / (sampling_rate_ms * 2))
-          .expect("Duration calculation overflow error!"),
-      );
+    let end = timestamp as u64 + (data.len() as u64 / (sampling_rate_ms * 2));
 
     Snippet {
-      start,
+      start: timestamp as u64,
       end,
       data,
       sampling_rate,
+      track,
     }
   }
 }
@@ -59,10 +60,12 @@ impl Composer {
 
     let last_snippet = self.snippets.back().unwrap();
 
-    return last_snippet
-      .end
-      .duration_since(first_snippet.start)
-      .expect("Time travel??");
+    println!(
+      "Clip length: {}",
+      last_snippet.end as i64 - first_snippet.start as i64
+    );
+
+    return Duration::from_millis(last_snippet.end - first_snippet.start);
   }
 
   pub fn compose(&self) -> Vec<i16> {
@@ -70,139 +73,35 @@ impl Composer {
       return Vec::new();
     }
 
-    let mut last_snippet_end: SystemTime = UNIX_EPOCH;
-
-    for snippet in self.snippets.iter() {
-      println!(
-        "Coherent: {}",
-        snippet
-          .start
-          .duration_since(UNIX_EPOCH)
-          .unwrap()
-          .as_millis() as i128
-          - last_snippet_end
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i128
-      );
-      last_snippet_end = snippet.end;
-    }
-
     let first_snippet = self.snippets.front().unwrap();
     let clip_start = first_snippet.start;
 
-    let sampling_rate_ms = first_snippet.sampling_rate as u128 / 1000;
+    let sampling_rate_ms = first_snippet.sampling_rate as u64 / 1000;
 
     let mut audio: Vec<i16> =
-      vec![0; (self.duration().as_millis() * sampling_rate_ms * 2) as usize];
+      vec![0; (self.duration().as_millis() as u64 * sampling_rate_ms * 2) as usize];
 
-    let mut last_index = 0;
+    let mut track_map = HashMap::<u32, usize>::new();
 
     for snippet in self.snippets.iter() {
-      let mut snippet_start_index = snippet
-        .start
-        .duration_since(clip_start)
-        .unwrap()
-        .as_millis()
-        * sampling_rate_ms
-        * 2;
+      let snippet_start_index = match track_map.get(&snippet.track) {
+        None => ((snippet.start - clip_start) * sampling_rate_ms * 2) as usize,
+        Some(v) => *v,
+      };
 
-      if snippet_start_index % 2 == 1 {
-        snippet_start_index += 1;
-      }
+      println!("snippet start index {}", snippet_start_index);
 
-      //println!("{}", snippet_start_index as i128 - last_index);
+      for (index, packet) in snippet.data.iter().enumerate() {
+        let global_index = snippet_start_index + index;
 
-      for (index, sample) in snippet.data.iter().enumerate() {
-        let index = snippet_start_index as usize + index;
+        audio[global_index] = (audio[global_index] as i32 + *packet as i32)
+          .clamp(i16::MIN as i32, i16::MAX as i32) as i16;
 
-        audio[index] = (i32::clamp(
-          *sample as i32 + audio[index] as i32,
-          i16::MIN as i32,
-          i16::MAX as i32,
-        )) as i16;
-
-        last_index = index as i128;
+        track_map.insert(snippet.track.clone(), global_index + 1);
       }
     }
 
     audio
-
-    /*if self.snippets.len() < 1 {
-      return Vec::new();
-    }
-
-    let first_snippet = self.snippets.front().unwrap();
-    let clip_start = first_snippet.start;
-    let sampling_rate_ms = first_snippet.sampling_rate as u128 / 1000;
-
-    println!(
-      "{} {}",
-      sampling_rate_ms,
-      first_snippet.sampling_rate as f64 / 1000 as f64
-    );
-
-    let mut long_snippet: Vec<i16> =
-      vec![0; (self.duration().as_millis() * sampling_rate_ms) as usize];
-
-    println!("{}", long_snippet.len());
-
-    let mut last_index = 0;
-
-    for snippet in self.snippets.iter() {
-      let clip_start_index = snippet
-        .start
-        .duration_since(clip_start)
-        .unwrap()
-        .as_millis()
-        * sampling_rate_ms;*/
-
-    /*println!(
-      "Indexes since start: {}",
-      clip_start_index as i128 - last_index as i128
-    );
-
-    if (clip_start_index as i128 - last_index as i128) < 1 {
-      continue;
-    }*/
-
-    /*let clip_start_distance = snippet
-    .start
-    .duration_since(first_snippet.start)
-    .unwrap()
-    .as_millis();*/
-
-    //for (index, sample) in snippet.data.iter().enumerate() {
-    /*let own_duration = index / snippet.sampling_rate as usize;
-    println!("{}", index as f32 / snippet.sampling_rate as f32);
-    let index =
-      (clip_start_distance as usize + own_duration) as usize / snippet.sampling_rate as usize;*/
-
-    //let global_index = index as u128 + clip_start_index;
-
-    /*if global_index as usize >= long_snippet.len() {
-      println!("global index out of range {}", global_index);
-      continue;
-    }*/
-
-    //println!("{}", global_index);
-
-    //let own_duration = index;
-
-    /*long_snippet[global_index as usize] = i32::clamp(
-      long_snippet[global_index as usize] as i32 + *sample as i32,
-      i16::MIN as i32,
-      i16::MAX as i32,
-    ) as i16;
-
-    last_index = global_index;*/
-
-    //println!("{} {}", long_snippet[index], index)
-    //}
-    //long_snippet.extend(snippet.data.iter());
-    //}
-
-    //long_snippet
   }
 }
 
@@ -242,7 +141,13 @@ impl Director {
     self.composers.remove(guild_id);
   }
 
-  pub fn incoming_audio(&mut self, guild_id: &GuildId, incoming_audio: Vec<i16>) {
+  pub fn incoming_audio(
+    &mut self,
+    guild_id: &GuildId,
+    incoming_audio: Vec<i16>,
+    timestamp: u32,
+    track: u32,
+  ) {
     let composer = match self.composers.get_mut(guild_id) {
       None => {
         let composer = Composer::new();
@@ -252,13 +157,12 @@ impl Director {
       Some(v) => v,
     };
 
-    composer.add_snippet(Snippet::new(incoming_audio, self.sampling_rate));
-
-    /*println!(
-      "Clip from Guild {} has duration {:?}",
-      guild_id.clone(),
-      composer.duration()
-    );*/
+    composer.add_snippet(Snippet::new(
+      incoming_audio,
+      self.sampling_rate,
+      timestamp,
+      track,
+    ));
 
     while composer.duration() > self.clip_duration {
       composer.shift();
@@ -274,6 +178,7 @@ impl Director {
     }
   }
 
+  #[allow(dead_code)]
   pub fn guild_clip_length(&mut self, guild_id: &GuildId) -> Duration {
     match self.composers.get(guild_id) {
       None => Duration::ZERO,
