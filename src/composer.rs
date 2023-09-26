@@ -163,6 +163,8 @@ impl Director {
       track,
     ));
 
+    println!("{:?}", composer.duration());
+
     while composer.duration() > self.clip_duration {
       composer.shift();
     }
