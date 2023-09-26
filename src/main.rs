@@ -1,5 +1,3 @@
-use serenity::model::prelude::AttachmentType;
-
 mod client;
 mod commands;
 mod composer;
@@ -7,7 +5,7 @@ mod handler;
 mod voice;
 use {
   composer::Director,
-  serenity::model::prelude::GuildId,
+  serenity::model::prelude::{AttachmentType, GuildId},
   std::sync::{Arc, Mutex},
   warp::Filter,
 };
@@ -29,19 +27,25 @@ async fn main() {
     let client = client.client.clone();
 
     tokio::spawn(async move {
-      let _ = client
+      for (_channel_id, guild_channel) in client
         .http
-        .get_channel(554690428876881941)
-        .await
-        .unwrap()
-        .guild()
-        .unwrap()
-        .send_files(
-          client.http.clone(),
-          vec![AttachmentType::from(std::path::Path::new(&path))],
-          |m| m.content("Clip!"),
-        )
-        .await;
+        .get_guild(guild_id)
+        .await?
+        .channels(client.http.clone())
+        .await?
+      {
+        if guild_channel.name == "clips" {
+          guild_channel
+            .send_files(
+              client.http.clone(),
+              vec![AttachmentType::from(std::path::Path::new(&path))],
+              |m| m.content("Clip!"),
+            )
+            .await?;
+        }
+      }
+
+      Ok::<(), serenity::Error>(())
     });
 
     format!("Clip!")
