@@ -1,4 +1,5 @@
 # clipper
+clip-bot that allows you to clip the last 30 seconds of audio in a voicechat
 
 ## setup
 1. create .cargo folder
