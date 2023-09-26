@@ -51,5 +51,10 @@ async fn main() {
     format!("Clip!")
   });
 
-  warp::serve(clip).run(([127, 0, 0, 1], 3001)).await;
+  warp::serve(clip)
+    .run((
+      [127, 0, 0, 1],
+      env!("PORT").parse().expect("Port is not a number"),
+    ))
+    .await;
 }
