@@ -4,7 +4,7 @@ clip-bot that allows you to clip the last 30 seconds of audio in a voicechat. It
 ## setup
 1. create .cargo folder
 2. create config.toml inside .cargo
-3. add
+3. write the following configuration the config.toml replacing DISCORD_BOT_TOKEN with your bot token. And replacing SERVER_PORT with a free port.
 ```toml
 [env]
 TOKEN = "DISCORD_BOT_TOKEN"
