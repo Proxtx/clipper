@@ -66,7 +66,10 @@ impl DiscordClient {
     tokio::spawn(async move {
       match client.start().await {
         Ok(_) => Ok(()),
-        Err(_) => return Err(DiscordClientError::ClientConnection),
+        Err(e) => {
+          println!("Was unable to start client! {}", e);
+          return Err(DiscordClientError::ClientConnection)
+        },
       }
     });
 
