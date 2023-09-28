@@ -281,6 +281,13 @@ async fn join_voice_channel(
     Ok(_) => {
       let mut handler = handler_lock.lock().await;
 
+      match handler.deafen(false).await {
+        Ok(_) => {}
+        Err(_) => {
+          println!("Was unable to set deaf status");
+        }
+      }
+
       let receiver = Receiver::new(guild_id.clone(), director);
 
       handler.add_global_event(CoreEvent::VoicePacket.into(), receiver.clone());
