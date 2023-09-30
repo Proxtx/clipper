@@ -1,0 +1,3 @@
+[env]
+TOKEN = "DISCORD_TOKEN"
+PORT = "3000"
