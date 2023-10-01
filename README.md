@@ -16,9 +16,10 @@ TOKEN = "DISCORD_BOT_TOKEN"
 PORT = "SERVER_PORT"
 ```
 
-4. add to server
-5. create "#clips" text channel
-6. copy server id
-7. run `cargo run`<br>
+4. Go to https://discord.com/developers/applications and create an application
+5. add to server
+6. create "#clips" text channel
+7. copy server id
+8. run `cargo run`<br>
    (if your on linux you might need to install libopus-dev)
-8. go to http://localhost:{PORT}/clip/{server id}
+9. go to http://localhost:{PORT}/clip/{server id}
