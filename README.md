@@ -23,3 +23,7 @@ PORT = "SERVER_PORT"
 8. run `cargo run`<br>
    (if your on linux you might need to install libopus-dev)
 9. go to http://localhost:{PORT}/clip/{server id}
+
+## custom clip-duration
+
+optionally you can add DURATION=MS your config.toml to adjust the clip-size.
