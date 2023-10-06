@@ -26,4 +26,4 @@ PORT = "SERVER_PORT"
 
 ## custom clip-duration
 
-optionally you can add DURATION=MS your config.toml to adjust the clip-size.
+optionally you can add DURATION="MS" your config.toml to adjust the clip-size. Replace MS with your duration in milliseconds.
