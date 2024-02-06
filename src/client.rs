@@ -68,8 +68,8 @@ impl DiscordClient {
         Ok(_) => Ok(()),
         Err(e) => {
           println!("Was unable to start client! {}", e);
-          return Err(DiscordClientError::ClientConnection)
-        },
+          Err(DiscordClientError::ClientConnection)
+        }
       }
     });
 

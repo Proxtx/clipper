@@ -33,7 +33,7 @@ async fn main() {
   .expect("Error starting discord client.");
 
   let clip = warp::path!("clip" / u64).map(move |guild_id: u64| {
-    let parsed_id = GuildId(guild_id.clone());
+    let parsed_id = GuildId(guild_id);
     let data = client.director.lock().unwrap().clip(&parsed_id);
 
     let path = voice::save_clip(&parsed_id, &data);
@@ -62,7 +62,7 @@ async fn main() {
       Ok::<(), serenity::Error>(())
     });
 
-    format!("Clip!")
+    "Clip!"
   });
 
   warp::serve(clip)

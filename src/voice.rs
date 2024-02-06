@@ -67,13 +67,12 @@ impl VoiceEventHandler for Receiver {
         if let Some(audio) = data.audio {
           let mut director = self.director.lock().unwrap();
 
-          let track = self
+          let track = *self
             .track_manager
             .lock()
             .unwrap()
             .get(&data.packet.ssrc)
-            .unwrap_or(&0)
-            .clone();
+            .unwrap_or(&0);
 
           if track == 0 {
             return None;
@@ -96,7 +95,7 @@ impl VoiceEventHandler for Receiver {
   }
 }
 
-pub fn save_clip(guild_id: &GuildId, data: &Vec<i16>) -> String {
+pub fn save_clip(guild_id: &GuildId, data: &[i16]) -> String {
   let path = format!(
     "output/{}/{}.wav",
     guild_id,
@@ -108,7 +107,7 @@ pub fn save_clip(guild_id: &GuildId, data: &Vec<i16>) -> String {
 
   let output_dir = format!("output/{}", guild_id);
 
-  std::fs::create_dir_all(&output_dir).unwrap();
+  std::fs::create_dir_all(output_dir).unwrap();
 
   let _ = wav::write(
     wav::Header::new(wav::header::WAV_FORMAT_PCM, 2, 48_000, 16),
@@ -206,7 +205,7 @@ async fn get_guild_voice_update(
         }
       }
 
-      if channel_with_members == None && channel_len > 0 {
+      if channel_with_members.is_none() && channel_len > 0 {
         channel_with_members = Some(channel.id);
       }
     }
@@ -252,7 +251,7 @@ async fn handle_guild_voice_state(
 
   director.lock().unwrap().handle_guild_voice_state(update);
 
-  return Ok(());
+  Ok(())
 }
 
 async fn join_voice_channel(
@@ -288,7 +287,7 @@ async fn join_voice_channel(
         }
       }
 
-      let receiver = Receiver::new(guild_id.clone(), director);
+      let receiver = Receiver::new(*guild_id, director);
 
       handler.add_global_event(CoreEvent::VoicePacket.into(), receiver.clone());
       handler.add_global_event(CoreEvent::SpeakingUpdate.into(), receiver.clone());
@@ -306,14 +305,13 @@ async fn join_voice_channel(
 async fn leave_voice_channel(ctx: &Context, guild_id: &GuildId) -> Result<(), VoiceError> {
   let manager = create_songbird_manager(ctx).await?;
 
-  match manager.get(guild_id.0) {
-    Some(call) => match call.lock().await.leave().await {
+  if let Some(call) = manager.get(guild_id.0) {
+    match call.lock().await.leave().await {
       Ok(_) => {}
       Err(_) => {
         return Err(VoiceError::SongbirdConnectError);
       }
-    },
-    None => {}
+    }
   };
   Ok(())
 }
