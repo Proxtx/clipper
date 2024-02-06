@@ -65,6 +65,8 @@ async fn main() {
     "Clip!"
   });
 
+  println!("Starting Webserver");
+
   warp::serve(clip)
     .run((
       [127, 0, 0, 1],
