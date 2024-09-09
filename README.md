@@ -23,6 +23,7 @@ PORT = "SERVER_PORT"
 8. run `cargo run`<br>
    (if your on linux you might need to install libopus-dev)
 9. go to http://localhost:{PORT}/clip/{server id}
+10. when updating the config keep in mind that you need fo rebuild since this the env is pulled from the file by the compiler
 
 ## custom clip-duration
 
