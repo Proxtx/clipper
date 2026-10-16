@@ -1,0 +1,9 @@
+# Trigger words for clipper, one word or sentence per line.
+# When someone in the voice channel says one of these, the bot plays a sound
+# and posts a clip to #clips. Case and punctuation don't matter.
+# Changes are picked up automatically within a few seconds, no restart needed.
+#
+# Run the bot with TRIGGER_DEBUG=1 to log what the model hears, which helps to
+# pick phrases it recognizes reliably (english loanwords can be hard for the
+# german model, e.g. "clip" may be heard as "clean").
+ok garmin video speichern

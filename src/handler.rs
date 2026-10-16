@@ -1,7 +1,7 @@
 use serenity::{
   async_trait,
   client::Context,
-  model::{gateway::Ready, voice::VoiceState},
+  model::{channel::Message, gateway::Ready, guild::Guild, voice::VoiceState},
   prelude::EventHandler,
 };
 
@@ -26,6 +26,20 @@ impl EventHandler for HandlerManager {
   async fn ready(&self, ctx: Context, data_about_bot: Ready) {
     for handler in self.internal_handlers.iter() {
       handler.ready(ctx.clone(), data_about_bot.clone()).await;
+    }
+  }
+
+  async fn guild_create(&self, ctx: Context, guild: Guild, is_new: Option<bool>) {
+    for handler in self.internal_handlers.iter() {
+      handler
+        .guild_create(ctx.clone(), guild.clone(), is_new)
+        .await;
+    }
+  }
+
+  async fn message(&self, ctx: Context, msg: Message) {
+    for handler in self.internal_handlers.iter() {
+      handler.message(ctx.clone(), msg.clone()).await;
     }
   }
 

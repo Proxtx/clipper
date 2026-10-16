@@ -1,22 +1,27 @@
 use {
   crate::{
-    composer::DirectorImplementation, handler::HandlerManager, voice::Handler as VoiceHandler,
+    composer::{DirectorImplementation, SAMPLING_RATE},
+    handler::HandlerManager,
+    triggers::TriggerHandle,
+    voice::Handler as VoiceHandler,
   },
   serenity::{
+    all::{Cache, Http},
     async_trait,
-    framework::StandardFramework,
     model::prelude::Ready,
     prelude::{Client, Context, EventHandler, GatewayIntents},
-    CacheAndHttp,
   },
-  songbird::{driver::DecodeMode, Config, SerenityInit},
+  songbird::{
+    driver::{Channels, DecodeConfig, DecodeMode, SampleRate},
+    Config, SerenityInit, Songbird,
+  },
   std::sync::Arc,
 };
 
 #[derive(Debug)]
+#[allow(dead_code)] // fields are only read through Debug when startup fails
 pub enum DiscordClientError {
-  ClientCreation,
-  ClientConnection,
+  ClientCreation(Box<serenity::Error>),
 }
 
 pub struct Handler;
@@ -30,52 +35,56 @@ impl EventHandler for Handler {
 
 pub struct DiscordClient {
   pub director: DirectorImplementation,
-  pub client: Arc<CacheAndHttp>,
+  pub http: Arc<Http>,
+  pub songbird: Arc<Songbird>,
+  #[allow(dead_code)]
+  pub cache: Arc<Cache>,
 }
 
 impl DiscordClient {
   pub async fn new(
     token: &str,
     director: DirectorImplementation,
+    trigger: Option<TriggerHandle>,
   ) -> Result<DiscordClient, DiscordClientError> {
     let mut handler_manager = HandlerManager::new();
 
     handler_manager.add_handler(Box::from(Handler));
-    handler_manager.add_handler(Box::from(VoiceHandler::new(director.clone())));
+    handler_manager.add_handler(Box::from(crate::commands::Handler));
+    handler_manager.add_handler(Box::from(VoiceHandler::new(director.clone(), trigger)));
 
-    let intents = GatewayIntents::all();
-    let songbird_config = Config::default().decode_mode(DecodeMode::Decode);
+    // MESSAGE_CONTENT is privileged and only needed for the ~info command
+    let intents = GatewayIntents::GUILDS
+      | GatewayIntents::GUILD_VOICE_STATES
+      | GatewayIntents::GUILD_MESSAGES
+      | GatewayIntents::MESSAGE_CONTENT;
 
-    // remove this since framework is legacy
-    let framework = StandardFramework::new()
-      .configure(|c| c.prefix("~"))
-      .group(&crate::commands::GENERAL_GROUP);
+    assert_eq!(SAMPLING_RATE, 48_000);
+    let songbird = Songbird::serenity_from_config(Config::default().decode_mode(
+      DecodeMode::Decode(DecodeConfig::new(Channels::Stereo, SampleRate::Hz48000)),
+    ));
 
-    let mut client = match Client::builder(token, intents)
+    let mut client = Client::builder(token, intents)
       .event_handler(handler_manager)
-      .register_songbird_from_config(songbird_config)
-      .framework(framework)
+      .register_songbird_with(songbird.clone())
       .await
-    {
-      Ok(client) => client,
-      Err(_) => return Err(DiscordClientError::ClientCreation),
-    };
+      .map_err(|e| DiscordClientError::ClientCreation(Box::new(e)))?;
 
-    let cache_and_http = client.cache_and_http.clone();
+    let http = client.http.clone();
+    let cache = client.cache.clone();
 
     tokio::spawn(async move {
-      match client.start().await {
-        Ok(_) => Ok(()),
-        Err(e) => {
-          println!("Was unable to start client! {}", e);
-          Err(DiscordClientError::ClientConnection)
-        }
+      if let Err(e) = client.start().await {
+        println!("Was unable to start client! {}", e);
+        std::process::exit(1);
       }
     });
 
     Ok(DiscordClient {
       director,
-      client: cache_and_http,
+      http,
+      songbird,
+      cache,
     })
   }
 }

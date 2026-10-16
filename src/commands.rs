@@ -1,18 +1,20 @@
-use serenity::{
-  client::Context,
-  framework::standard::{
-    macros::{command, group},
-    CommandResult,
-  },
-  model::channel::Message,
-};
+use serenity::{async_trait, client::Context, model::channel::Message, prelude::EventHandler};
 
-#[group]
-#[commands(info)]
-struct General;
+pub const PREFIX: &str = "~";
 
-#[command]
-async fn info(ctx: &Context, msg: &Message) -> CommandResult {
-  msg.reply(ctx, "Bot is running!").await?;
-  Ok(())
+pub struct Handler;
+
+#[async_trait]
+impl EventHandler for Handler {
+  async fn message(&self, ctx: Context, msg: Message) {
+    if msg.author.bot {
+      return;
+    }
+
+    if msg.content.trim() == format!("{}info", PREFIX) {
+      if let Err(e) = msg.reply(&ctx, "Bot is running!").await {
+        println!("Was unable to reply to info command: {}", e);
+      }
+    }
+  }
 }
